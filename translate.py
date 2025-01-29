@@ -2,10 +2,10 @@ from transformers import T5Tokenizer, T5ForConditionalGeneration
 from nltk import sent_tokenize
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def load_model():
-    model_name = "leukas/mt5-large-wmt14-250k-deen"
+    model_name = "leukas/mt5-large-wmt14-1250k-deen"
     model = T5ForConditionalGeneration.from_pretrained(model_name)
     tokenizer = T5Tokenizer.from_pretrained(model_name)
     return model, tokenizer
@@ -55,25 +55,37 @@ def translate_chunk(model, tokenizer, chunk):
 def translate_long_text(model, tokenizer, text, max_length=512, overlap=2):
     sentences = split_into_sentences(text, language="german")
     chunks = split_into_chunks(sentences, tokenizer, max_length=max_length, overlap=overlap)
-    translated_chunks = [translate_chunk(model, tokenizer, chunk) for chunk in chunks]
+    translated_chunks = []
+
+    for idx, chunk in enumerate(chunks, start=1):
+        translated_chunk = translate_chunk(model, tokenizer, chunk)
+        translated_chunks.append(translated_chunk)
+        # Log progress and the last translated sentence
+        logging.info(f"Translated chunk {idx}/{len(chunks)}: {translated_chunk[:50]}...")
+
     return " ".join(translated_chunks)
 
 def translate_file(input_file, output_file, model, tokenizer, max_length=512, overlap=2):
     try:
         with open(input_file, "r", encoding="utf-8") as infile:
             lines = infile.readlines()
-        translated_lines = []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            translated_text = translate_long_text(model, tokenizer, line, max_length=max_length, overlap=overlap)
-            translated_lines.append(translated_text)
+
+        total_lines = len(lines)
 
         with open(output_file, "w", encoding="utf-8") as outfile:
-            outfile.write("\n".join(translated_lines))
+            for line_idx, line in enumerate(lines, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+
+                translated_text = translate_long_text(model, tokenizer, line, max_length=max_length, overlap=overlap)
+                outfile.write(translated_text + "\n")
+
+                # Log progress for each line
+                logging.info(f"Processed line {line_idx}/{total_lines}: {translated_text[:50]}...")
 
         logging.info(f"Translation complete! Results saved in '{output_file}'")
+
     except FileNotFoundError:
         logging.error(f"Error: Input file '{input_file}' not found.")
     except Exception as e:
@@ -89,3 +101,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
